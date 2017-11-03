@@ -23,6 +23,7 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 import org.tensorflow.hadoop.io.TFRecordFileOutputFormat
 import org.tensorflow.spark.datasources.tfrecords.serde.DefaultTfRecordRowEncoder
+import org.apache.hadoop.conf.Configuration
 
 /**
  * Provides access to TensorFlow record source
@@ -72,7 +73,7 @@ class DefaultSource extends DataSourceRegister
     mode match {
         case SaveMode.Overwrite =>
             fs.delete(qualifiedOutputPath, true)
-            save(features, path)
+            save(features, path, parameters)
 
         case SaveMode.Append =>
             throw new IllegalArgumentException("Append mode is not supported")
@@ -81,21 +82,27 @@ class DefaultSource extends DataSourceRegister
             if (pathExists)
                 throw new IllegalStateException(
                     s"Path $path already exists. SaveMode: ErrorIfExists.")
-            save(features, path)
+            save(features, path, parameters)
 
         case SaveMode.Ignore =>
         // With `SaveMode.Ignore` mode, if data already exists, the save operation is expected
         // to not save the contents of the DataFrame and to not change the existing data.
         // Therefore, it is okay to do nothing here and then just return the relation below.
             if (pathExists == false)
-                save(features, path)
+                save(features, path, parameters)
     }
 
     TensorflowRelation(parameters)(sqlContext.sparkSession)
   }
 
-  private def save(features: RDD[(BytesWritable, NullWritable)], path: String) = {
-      features.saveAsNewAPIHadoopFile[TFRecordFileOutputFormat](path)
+  private def save(features: RDD[(BytesWritable, NullWritable)], path: String, parameters: Map[String, String]) = {
+    val conf = new Configuration()
+    for {
+      (k, v) <- parameters
+    } {
+      conf.set(k, v)
+    }
+    features.saveAsNewAPIHadoopFile(path, classOf[BytesWritable], classOf[NullWritable], classOf[TFRecordFileOutputFormat], conf = conf)
   }
 
   // Reads TensorFlow Records into DataFrame with Custom Schema

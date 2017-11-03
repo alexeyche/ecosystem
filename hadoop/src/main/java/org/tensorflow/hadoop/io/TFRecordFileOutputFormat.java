@@ -15,6 +15,9 @@ limitations under the License.
 
 package org.tensorflow.hadoop.io;
 
+import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.CompressionOutputStream;
+import org.apache.hadoop.util.ReflectionUtils;
 import org.tensorflow.hadoop.util.TFRecordWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -25,7 +28,10 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.io.compress.GzipCodec;
 
+import java.io.DataOutput;
+import java.io.DataOutputStream;
 import java.io.IOException;
 
 public class TFRecordFileOutputFormat extends FileOutputFormat<BytesWritable, NullWritable> {
@@ -36,18 +42,50 @@ public class TFRecordFileOutputFormat extends FileOutputFormat<BytesWritable, Nu
     FileSystem fs = file.getFileSystem(conf);
 
     int bufferSize = TFRecordIOConf.getBufferSize(conf);
-    final FSDataOutputStream fsdos = fs.create(file, true, bufferSize);
-    final TFRecordWriter writer = new TFRecordWriter(fsdos);
-    return new RecordWriter<BytesWritable, NullWritable>() {
-      @Override public void write(BytesWritable key, NullWritable value)
-          throws IOException, InterruptedException {
-        writer.write(key.getBytes(), 0, key.getLength());
-      }
 
-      @Override public void close(TaskAttemptContext context)
-          throws IOException, InterruptedException {
-        fsdos.close();
-      }
-    };
+    boolean isCompressed = getCompressOutput(context);
+
+    if(!isCompressed) {
+      final FSDataOutputStream fsdos = fs.create(file, true, bufferSize);
+
+      final TFRecordWriter writer = new TFRecordWriter(fsdos);
+
+      return new RecordWriter<BytesWritable, NullWritable>() {
+        @Override public void write(BytesWritable key, NullWritable value)
+                throws IOException, InterruptedException {
+
+          writer.write(key.getBytes(), 0, key.getLength());
+        }
+
+        @Override public void close(TaskAttemptContext context)
+                throws IOException, InterruptedException {
+          fsdos.close();
+        }
+      };
+    } else {
+      final Class<? extends CompressionCodec> codecClass = getOutputCompressorClass(context, GzipCodec.class); // default gzip
+      final CompressionCodec codec = ReflectionUtils.newInstance(codecClass, conf);
+
+      final FSDataOutputStream fsdos = fs.create(file, true, bufferSize);
+      final CompressionOutputStream os = codec.createOutputStream(fsdos);
+
+      final DataOutput dos = new DataOutputStream(os);
+      final TFRecordWriter writer = new TFRecordWriter(dos);
+
+      return new RecordWriter<BytesWritable, NullWritable>() {
+        @Override public void write(BytesWritable key, NullWritable value)
+                throws IOException, InterruptedException {
+
+          writer.write(key.getBytes(), 0, key.getLength());
+        }
+
+        @Override public void close(TaskAttemptContext context)
+                throws IOException, InterruptedException {
+          os.close();
+          fsdos.close();
+        }
+      };
+    }
+
   }
 }

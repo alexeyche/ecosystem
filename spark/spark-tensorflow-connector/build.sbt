@@ -16,7 +16,8 @@ def ProjectName(name: String,path:String): Project =  Project(name, file(path))
 
 resolvers in Global ++= Seq("https://tap.jfrog.io/tap/public" at "https://tap.jfrog.io/tap/public" ,
            "https://tap.jfrog.io/tap/public-snapshots" at "https://tap.jfrog.io/tap/public-snapshots" ,
-           "https://repo.maven.apache.org/maven2" at "https://repo.maven.apache.org/maven2" )
+           "https://repo.maven.apache.org/maven2" at "https://repo.maven.apache.org/maven2" ,
+            Resolver.mavenLocal)
 
 val `junit_junit` = "junit" % "junit" % "4.12"
 
@@ -30,7 +31,7 @@ val `org.apache.spark_spark-mllib_2.11` = "org.apache.spark" % "spark-mllib_2.11
 
 val `org.scalatest_scalatest_2.11` = "org.scalatest" % "scalatest_2.11" % "2.2.6"
 
-val `org.tensorflow_tensorflow-hadoop` = "org.tensorflow" % "tensorflow-hadoop" % "1.0-06262017-SNAPSHOT"
+val `org.tensorflow_tensorflow-hadoop` = "org.tensorflow" % "tensorflow-hadoop" % "1.0-SNAPSHOT"
 
 libraryDependencies in Global ++= Seq(`org.tensorflow_tensorflow-hadoop` classifier "shaded-protobuf",
    `org.scalatest_scalatest_2.11` % "test" ,
